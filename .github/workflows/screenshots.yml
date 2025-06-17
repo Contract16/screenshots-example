@@ -1,0 +1,54 @@
+name: Golden
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 0 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout and Setup
+        uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
+          cache-path: "${{ runner.tool_cache }}/flutter/:channel:-:version:-:arch:"
+
+      - uses: oleksiyrudenko/gha-git-credentials@v2-latest
+        with:
+          token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - run: flutter --version
+
+      - name: Get dependencies
+        run: |
+          flutter pub get
+
+      - name: Delete existing screenshots
+        run: |
+          chmod +x ./scripts/delete_screenshots.sh
+          ./scripts/delete_screenshots.sh
+
+      - name: Generate screenshots
+        run: flutter test -t "golden" --update-goldens
+
+      - name: Generate screenshots markdown document
+        run: |
+          chmod +x ./scripts/update_screenshots.sh
+          ./scripts/update_screenshots.sh
+
+      - run: |
+          git add screenshots/app_screenshots.md
+          git add test/*
+          if ! git diff --cached --quiet; then
+            git commit -m "Update screenshots: ${{github.run_number}} [skip ci]"
+            git push
+          fi
